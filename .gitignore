@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+
+work/customer-state-center/data/
+work/customer-state-center/demo_output.txt
