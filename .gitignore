@@ -3,3 +3,4 @@ __pycache__/
 
 work/customer-state-center/data/
 work/customer-state-center/demo_output.txt
+work/customer-state-center/server*.log
