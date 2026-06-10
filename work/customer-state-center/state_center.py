@@ -438,6 +438,24 @@ class StateCenter:
         text_value = str(payload.get("text") or "")
         signals = self.detect_message_signals(text_value, payload)
         actions: list[dict[str, Any]] = []
+        info = self.merge_customer_info(task, extract_customer_info(text_value, payload))
+        missing = missing_fields(info)
+        has_useful_info = bool(info["customer_name"] or info["birth_year"] or info["birth_month"] or info["birth_day"])
+
+        if not task.link_clicked:
+            task = self.update_customer(
+                task,
+                current_status="WAITING_LINK_CLICK",
+                useful_info_received=has_useful_info,
+                info_complete=not missing if has_useful_info else task.info_complete,
+                missing_fields=missing if has_useful_info else task.missing_fields,
+                customer_name=info["customer_name"] or task.customer_name,
+                birth_year=info["birth_year"] or task.birth_year,
+                birth_month=info["birth_month"] or task.birth_month,
+                birth_day=info["birth_day"] or task.birth_day,
+            )
+            actions.extend(self.create_link_prompt_actions(task.id))
+            return {"customer_task": task.to_dict(), "actions": actions, "signals": signals}
 
         if signals["red_packet"]:
             task = self.update_customer(task, current_status="RED_PACKET_RECEIVED")
@@ -453,10 +471,6 @@ class StateCenter:
             task = self.update_customer(task, current_status="PAYMENT_FAILED")
             actions.append(self.create_action(task.id, "SEND_PAYMENT_QR", {"asset_key": "default_payment_qr"}))
             return {"customer_task": task.to_dict(), "actions": actions, "signals": signals}
-
-        info = self.merge_customer_info(task, extract_customer_info(text_value, payload))
-        missing = missing_fields(info)
-        has_useful_info = bool(info["customer_name"] or info["birth_year"] or info["birth_month"] or info["birth_day"])
 
         if not has_useful_info:
             task = self.update_customer(task, current_status="WAITING_INFO", useful_info_received=False)
@@ -480,19 +494,6 @@ class StateCenter:
             actions.extend(self.actions_for_missing_fields(task.id, missing))
             return {"customer_task": task.to_dict(), "actions": actions, "signals": signals}
 
-        if not task.link_clicked:
-            task = self.update_customer(task, current_status="WAITING_LINK_CLICK")
-            actions.append(self.create_action(task.id, "ASK_CLICK_LINK", {"text": "点链接参与排队"}))
-            actions.append(
-                self.create_action(
-                    task.id,
-                    "CHECK_LINK_CLICKED_AFTER_2MIN",
-                    {"event_type": "CHECK_LINK_CLICKED_AFTER_2MIN"},
-                    scheduled_at=after_seconds(120),
-                )
-            )
-            return {"customer_task": task.to_dict(), "actions": actions, "signals": signals}
-
         actions.extend(self.create_registration_actions(task))
         task = self.get_customer(task.id)
         return {"customer_task": task.to_dict(), "actions": actions, "signals": signals}
@@ -502,9 +503,8 @@ class StateCenter:
         if task.deleted_by_customer or task.final_status == "FINISHED":
             return {"customer_task": task.to_dict(), "actions": actions}
         self.cancel_pending_actions(task.id, ["CHECK_LINK_CLICKED_AFTER_2MIN"])
-        if task.info_complete:
-            actions.extend(self.create_registration_actions(task))
-            task = self.get_customer(task.id)
+        if not task.link_clicked:
+            task = self.finish_task(task, "FINISHED", "客户未点击链接，结束流程")
         return {"customer_task": task.to_dict(), "actions": actions}
 
     def merge_customer_info(self, task: CustomerTask, incoming: dict[str, str | None]) -> dict[str, str | None]:
@@ -523,6 +523,17 @@ class StateCenter:
         if birthday_missing:
             actions.append(self.create_action(task_id, "ASK_MISSING_BIRTHDAY", {"text": "把出生年月日发我一下"}))
         return actions
+
+    def create_link_prompt_actions(self, task_id: str) -> list[dict[str, Any]]:
+        return [
+            self.create_action(task_id, "ASK_CLICK_LINK", {"text": "先点链接参与排队，点完我再继续给你看"}),
+            self.create_action(
+                task_id,
+                "CHECK_LINK_CLICKED_AFTER_2MIN",
+                {"event_type": "CHECK_LINK_CLICKED_AFTER_2MIN"},
+                scheduled_at=after_seconds(120),
+            ),
+        ]
 
     def create_registration_actions(self, task: CustomerTask) -> list[dict[str, Any]]:
         if task.registered_at:

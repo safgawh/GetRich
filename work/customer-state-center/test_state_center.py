@@ -51,6 +51,21 @@ class StateCenterTests(unittest.TestCase):
         pending_checks = [a for a in self.center.list_actions("pending") if a["action_type"] == "CHECK_LINK_CLICKED_AFTER_2MIN"]
         self.assertEqual(pending_checks, [])
 
+    def test_messages_before_link_click_only_prompt_link(self) -> None:
+        self.center.handle_event("NEW_CUSTOMER", "c6")
+        result = self.center.handle_event("CUSTOMER_MESSAGE", "c6", {"text": "【红包】", "red_packet": True})
+        action_types = [a["action_type"] for a in result["actions"]]
+
+        self.assertEqual(result["customer_task"]["current_status"], "WAITING_LINK_CLICK")
+        self.assertIn("ASK_CLICK_LINK", action_types)
+        self.assertIn("CHECK_LINK_CLICKED_AFTER_2MIN", action_types)
+        self.assertNotIn("SEND_RED_PACKET_REPLY", action_types)
+
+        checked = self.center.handle_event("CHECK_LINK_CLICKED_AFTER_2MIN", "c6")
+        self.assertEqual(checked["customer_task"]["current_status"], "FINISHED")
+        self.assertEqual(checked["customer_task"]["final_status"], "FINISHED")
+        self.assertEqual(self.center.list_actions("pending"), [])
+
     def test_video_success_schedules_payment_link_after_six_minutes(self) -> None:
         self.center.handle_event("NEW_CUSTOMER", "c4")
         self.center.handle_event("LINK_CLICKED", "c4")

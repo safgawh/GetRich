@@ -158,6 +158,63 @@ INDEX_HTML = r"""<!doctype html>
       min-height: 180px;
     }
 
+    .shield {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .shield-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.78);
+    }
+
+    .shield-badge {
+      background: rgba(22, 163, 74, 0.22);
+      border: 1px solid rgba(74, 222, 128, 0.45);
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 12px;
+      color: #bbf7d0;
+    }
+
+    .shield textarea {
+      min-height: 62px;
+      max-height: 112px;
+      border-color: rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      box-shadow: none;
+      font-size: 13px;
+    }
+
+    .shield textarea::placeholder {
+      color: rgba(255,255,255,0.48);
+    }
+
+    .shield-output {
+      min-height: 64px;
+      max-height: 132px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      border-radius: 6px;
+      padding: 9px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
     .snapshot-title {
       font-size: 13px;
       color: rgba(255,255,255,0.78);
@@ -385,11 +442,26 @@ INDEX_HTML = r"""<!doctype html>
         <div class="actions">
           <button class="primary wide" id="newCustomer">新客户进入</button>
           <button class="blue" id="clickLink">客户点链接</button>
+          <button class="orange" id="linkCheck">2分钟检查</button>
           <button id="screenshot">发截图</button>
           <button id="redPacket">发红包</button>
           <button class="orange" id="resolution">问化解</button>
           <button class="red" id="deleted">删除客户</button>
           <button class="wide" id="resetChat">清空窗口</button>
+        </div>
+      </div>
+
+      <div class="shield">
+        <div class="shield-title">
+          <span>小企盾</span>
+          <span class="shield-badge">文字转换</span>
+        </div>
+        <textarea id="shieldInput" placeholder="输入正常话术"></textarea>
+        <div class="shield-output" id="shieldOutput"></div>
+        <div class="actions">
+          <button class="primary" id="shieldConvert">转换</button>
+          <button id="shieldCopy">复制</button>
+          <button class="wide blue" id="shieldUse">填入聊天框</button>
         </div>
       </div>
 
@@ -441,6 +513,10 @@ INDEX_HTML = r"""<!doctype html>
     const pendingPanel = document.getElementById("pending");
     const pendingList = document.getElementById("pendingList");
     const message = document.getElementById("message");
+    const shieldInput = document.getElementById("shieldInput");
+    const shieldOutput = document.getElementById("shieldOutput");
+    const BIDI_PREFIX = "\u2067\u202e";
+    const BIDI_SUFFIX = "\u202c\u2069";
 
     const actionText = {
       SEND_LINK: (a) => `请点这个链接参与排队：${demoLink(a.payload.link_id)}`,
@@ -467,6 +543,31 @@ INDEX_HTML = r"""<!doctype html>
 
     function demoLink(linkId) {
       return `https://queue.example/${linkId || "demo"}`;
+    }
+
+    function reverseChars(text) {
+      return Array.from(text).reverse().join("");
+    }
+
+    function splitByFixedLength(text, size = 12) {
+      const chars = Array.from(text.replace(/\r?\n/g, ""));
+      const parts = [];
+      for (let index = 0; index < chars.length; index += size) {
+        parts.push(chars.slice(index, index + size).join(""));
+      }
+      return parts.length ? parts : [""];
+    }
+
+    function convertBidi(text) {
+      return splitByFixedLength(text, 12)
+        .map((part) => BIDI_PREFIX + reverseChars(part) + BIDI_SUFFIX)
+        .join("\n");
+    }
+
+    function updateShieldOutput() {
+      const converted = convertBidi(shieldInput.value);
+      shieldOutput.textContent = converted;
+      return converted;
     }
 
     function addBubble(who, text) {
@@ -597,6 +698,11 @@ INDEX_HTML = r"""<!doctype html>
       await sendEvent("CUSTOMER_MESSAGE", { text: "【红包】", red_packet: true }, "【红包】");
     });
 
+    document.getElementById("linkCheck").addEventListener("click", async () => {
+      addNote("执行 2 分钟检查");
+      await sendEvent("CHECK_LINK_CLICKED_AFTER_2MIN");
+    });
+
     document.getElementById("resolution").addEventListener("click", async () => {
       await sendEvent("CUSTOMER_MESSAGE", { text: "怎么化解？" }, "怎么化解？");
     });
@@ -619,6 +725,29 @@ INDEX_HTML = r"""<!doctype html>
     });
 
     customerIdInput.addEventListener("input", customerId);
+    shieldInput.addEventListener("input", updateShieldOutput);
+
+    document.getElementById("shieldConvert").addEventListener("click", (event) => {
+      event.preventDefault();
+      updateShieldOutput();
+    });
+
+    document.getElementById("shieldCopy").addEventListener("click", async (event) => {
+      event.preventDefault();
+      const converted = updateShieldOutput();
+      try {
+        await navigator.clipboard.writeText(converted);
+        addNote("小企盾结果已复制");
+      } catch {
+        addNote("浏览器不允许自动复制，请手动选中结果复制");
+      }
+    });
+
+    document.getElementById("shieldUse").addEventListener("click", (event) => {
+      event.preventDefault();
+      message.value = updateShieldOutput();
+      message.focus();
+    });
 
     message.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
