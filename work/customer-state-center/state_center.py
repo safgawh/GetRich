@@ -212,6 +212,31 @@ class StateCenter:
         self.conn.commit()
         return self.get_customer(task_id)
 
+    def restart_customer(self, task: CustomerTask) -> CustomerTask:
+        self.cancel_pending_actions(task.id)
+        return self.update_customer(
+            task,
+            current_status="NEW_CUSTOMER",
+            link_id=None,
+            link_sent_at=None,
+            link_clicked=False,
+            link_clicked_at=None,
+            useful_info_received=False,
+            info_complete=False,
+            missing_fields=[],
+            customer_name=None,
+            birth_year=None,
+            birth_month=None,
+            birth_day=None,
+            registered_at=None,
+            wait_message_sent_at=None,
+            video_task_id=None,
+            video_sent_at=None,
+            payment_link_sent_at=None,
+            deleted_by_customer=False,
+            final_status=None,
+        )
+
     def get_customer(self, task_id: str) -> CustomerTask:
         row = self.conn.execute("SELECT * FROM customer_task WHERE id = ?", (task_id,)).fetchone()
         if not row:
@@ -396,6 +421,8 @@ class StateCenter:
             return {"customer_task": task.to_dict(), "actions": [], "ignored": True, "reason": "task_already_finished"}
 
         if event_type == "NEW_CUSTOMER":
+            if task.final_status == "FINISHED":
+                task = self.restart_customer(task)
             if task.link_sent_at or self.find_pending_action(task.id, "SEND_LINK"):
                 return {"customer_task": task.to_dict(), "actions": []}
             task = self.update_customer(task, current_status=task.current_status if task.current_status != "NEW_CUSTOMER" else "NEW_CUSTOMER")

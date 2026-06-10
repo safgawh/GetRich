@@ -682,6 +682,9 @@ INDEX_HTML = r"""<!doctype html>
     }
 
     document.getElementById("newCustomer").addEventListener("click", async () => {
+      if (topStatus.textContent === "FINISHED" || topStatus.textContent === "CUSTOMER_DELETED") {
+        addNote("重新开始这个客户流程");
+      }
       addNote("新客户进入");
       await sendEvent("NEW_CUSTOMER");
     });

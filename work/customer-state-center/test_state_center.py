@@ -66,6 +66,21 @@ class StateCenterTests(unittest.TestCase):
         self.assertEqual(checked["customer_task"]["final_status"], "FINISHED")
         self.assertEqual(self.center.list_actions("pending"), [])
 
+    def test_new_customer_restarts_finished_customer(self) -> None:
+        self.center.handle_event("NEW_CUSTOMER", "c7")
+        self.center.handle_event("CHECK_LINK_CLICKED_AFTER_2MIN", "c7")
+
+        restarted = self.center.handle_event("NEW_CUSTOMER", "c7")
+        self.assertIsNone(restarted["customer_task"]["final_status"])
+        self.assertEqual(restarted["customer_task"]["current_status"], "NEW_CUSTOMER")
+        self.assertTrue(any(a["action_type"] == "SEND_LINK" for a in restarted["actions"]))
+
+        message = self.center.handle_event("CUSTOMER_MESSAGE", "c7", {"text": "张三 男 腊月初九"})
+        action_types = [a["action_type"] for a in message["actions"]]
+        self.assertEqual(message["customer_task"]["current_status"], "WAITING_LINK_CLICK")
+        self.assertIn("ASK_CLICK_LINK", action_types)
+        self.assertFalse(message.get("ignored"))
+
     def test_video_success_schedules_payment_link_after_six_minutes(self) -> None:
         self.center.handle_event("NEW_CUSTOMER", "c4")
         self.center.handle_event("LINK_CLICKED", "c4")
