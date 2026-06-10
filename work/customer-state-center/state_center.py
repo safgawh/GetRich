@@ -552,15 +552,19 @@ class StateCenter:
         return actions
 
     def create_link_prompt_actions(self, task_id: str) -> list[dict[str, Any]]:
-        return [
-            self.create_action(task_id, "ASK_CLICK_LINK", {"text": "先点链接参与排队，点完我再继续给你看"}),
-            self.create_action(
-                task_id,
-                "CHECK_LINK_CLICKED_AFTER_2MIN",
-                {"event_type": "CHECK_LINK_CLICKED_AFTER_2MIN"},
-                scheduled_at=after_seconds(120),
-            ),
-        ]
+        actions = []
+        if not self.find_pending_action(task_id, "ASK_CLICK_LINK"):
+            actions.append(self.create_action(task_id, "ASK_CLICK_LINK", {"text": "点链接参与排队，这会人有点多"}))
+        if not self.find_pending_action(task_id, "CHECK_LINK_CLICKED_AFTER_2MIN"):
+            actions.append(
+                self.create_action(
+                    task_id,
+                    "CHECK_LINK_CLICKED_AFTER_2MIN",
+                    {"event_type": "CHECK_LINK_CLICKED_AFTER_2MIN"},
+                    scheduled_at=after_seconds(120),
+                )
+            )
+        return actions
 
     def create_registration_actions(self, task: CustomerTask) -> list[dict[str, Any]]:
         if task.registered_at:

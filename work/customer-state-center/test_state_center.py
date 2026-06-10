@@ -60,6 +60,12 @@ class StateCenterTests(unittest.TestCase):
         self.assertIn("ASK_CLICK_LINK", action_types)
         self.assertIn("CHECK_LINK_CLICKED_AFTER_2MIN", action_types)
         self.assertNotIn("SEND_RED_PACKET_REPLY", action_types)
+        prompt = next(a for a in result["actions"] if a["action_type"] == "ASK_CLICK_LINK")
+        self.assertEqual(prompt["payload"]["text"], "点链接参与排队，这会人有点多")
+
+        repeated = self.center.handle_event("CUSTOMER_MESSAGE", "c6", {"text": "1"})
+        self.assertEqual(repeated["customer_task"]["current_status"], "WAITING_LINK_CLICK")
+        self.assertEqual(repeated["actions"], [])
 
         checked = self.center.handle_event("CHECK_LINK_CLICKED_AFTER_2MIN", "c6")
         self.assertEqual(checked["customer_task"]["current_status"], "FINISHED")
