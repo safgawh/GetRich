@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -619,6 +620,13 @@ INDEX_HTML = r"""<!doctype html>
 
     customerIdInput.addEventListener("input", customerId);
 
+    message.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        document.getElementById("composer").requestSubmit();
+      }
+    });
+
     document.getElementById("composer").addEventListener("submit", async (event) => {
       event.preventDefault();
       const text = message.value.trim();
@@ -735,4 +743,8 @@ def run(host: str = "127.0.0.1", port: int = 8787) -> None:
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8787)
+    args = parser.parse_args()
+    run(args.host, args.port)
